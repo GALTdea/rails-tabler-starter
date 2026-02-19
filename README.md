@@ -34,10 +34,50 @@
 
 ## Space Management & Architecture
 
-The app uses a **Space-based** architecture for teams or organizations.
+The app uses a **Space-based** architecture for teams or organizations. A **Space** is the main tenant: it represents one team or organization, with its own members, roles, and subscription.
 
 * **Standard Roles:** Admin and Member roles per space.
 * **Permissions:** Built-in support for custom roles and granular access controls via Pundit.
+
+### What the Space model is for
+
+* **Multi-tenancy:** Each Space is an isolated tenant. When `multi_tenant_mode` is on, users pick a Space (or get assigned to one) and all data and navigation are scoped to that Space.
+* **Teams/Organizations:** Spaces group users and assign roles (e.g. who can manage the space, invite users, or view billing). Use space-scoped paths in the UI (e.g. `space_xyz_path(@space)`).
+* **Billing:** Subscriptions and plans are attached to a Space. The `Space#active_subscription` method drives feature limits and plan-based behavior (e.g. Free vs Pro).
+
+### Examples
+
+**Create a space and add a user with a role:**
+
+```ruby
+space = Space.create!(name: "Acme Corp", email: "billing@acme.com", status: :active)
+admin_role = Role.find_by(type: "common", value: "admin") # or your space-specific role
+UserRole.create!(user: current_user, space: space, role: admin_role)
+```
+
+**Scope resources to the current space (e.g. in a controller):**
+
+```ruby
+# Only list items for the current tenant
+@items = @space.items
+# Or use the space in policies
+authorize @space, :manage?
+```
+
+**Check the space’s subscription for feature gating:**
+
+```ruby
+plan = @space.active_subscription.plan
+if plan.name != "Free"
+  # Allow premium feature
+end
+```
+
+**Roles available in a space (global + space-specific):**
+
+```ruby
+@space.all_roles  # => roles that apply to this space (common roles + space_id = @space.id)
+```
 
 ## Theming Engine
 
