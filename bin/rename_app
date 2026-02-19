@@ -1,0 +1,223 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "optparse"
+
+OLD_MODULE_NAME = "RailsTabler8"
+OLD_DISPLAY_NAME = "Rails Tabler 8"
+OLD_PWA_NAME = "RailsTabler8"
+OLD_TEMPLATE_TITLE = "Rails Tabler Starter"
+OLD_SLUG = "rails-tabler-starter"
+OLD_DEPLOY_ID = "rails_tabler_starter"
+
+APP_ROOT = File.expand_path("..", __dir__)
+
+def abort_with(message)
+  warn "Error: #{message}"
+  exit 1
+end
+
+def titleize_slug(slug)
+  slug.split("-").reject(&:empty?).map(&:capitalize).join
+end
+
+def normalize_slug(value)
+  value.to_s.downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-+|-+\z/, "")
+end
+
+def apply_replacements(content, replacements)
+  updated = content.dup
+  replacements.each do |pattern, replacement|
+    updated = updated.gsub(pattern, replacement)
+  end
+  updated
+end
+
+def update_file(path, replacements, dry_run:, verbose:)
+  full_path = File.join(APP_ROOT, path)
+  abort_with("Missing file: #{path}") unless File.exist?(full_path)
+
+  original = File.read(full_path, encoding: "UTF-8")
+  updated = apply_replacements(original, replacements)
+
+  if original == updated
+    puts "UNCHANGED #{path}" if verbose
+    return :unchanged
+  end
+
+  if dry_run
+    puts "WOULD UPDATE #{path}"
+  else
+    File.write(full_path, updated, mode: "w:UTF-8")
+    puts "UPDATED #{path}"
+  end
+
+  :updated
+end
+
+options = {
+  dry_run: false,
+  verbose: true
+}
+
+parser = OptionParser.new do |opts|
+  opts.banner = <<~USAGE
+    Usage: bin/rename_app NEW_APP_NAME [options]
+
+    Example:
+      bin/rename_app "Acme Portal" --slug acme-portal --module AcmePortal --host app.acme.com --from-email noreply@acme.com
+  USAGE
+
+  opts.on("--slug VALUE", "URL/repo slug (default: derived from NEW_APP_NAME)") { |v| options[:slug] = v }
+  opts.on("--module VALUE", "Ruby module name (default: CamelCase slug)") { |v| options[:module_name] = v }
+  opts.on("--host VALUE", "Primary host (updates config/deploy.yml and .env.sample APP_URL)") { |v| options[:host] = v }
+  opts.on("--app-url VALUE", "APP_URL value for .env.sample (defaults to --host when provided)") { |v| options[:app_url] = v }
+  opts.on("--from-email VALUE", "Sender email for Devise/ApplicationMailer") { |v| options[:from_email] = v }
+  opts.on("--dry-run", "Preview changes without writing files") { options[:dry_run] = true }
+  opts.on("--quiet", "Reduce output") { options[:verbose] = false }
+  opts.on("-h", "--help", "Show help") do
+    puts opts
+    exit 0
+  end
+end
+
+parser.parse!
+display_name = ARGV.join(" ").strip
+abort_with("Provide NEW_APP_NAME.") if display_name.empty?
+
+slug = normalize_slug(options[:slug] || display_name)
+abort_with("Could not derive a valid slug. Pass --slug explicitly.") if slug.empty?
+
+module_name = options[:module_name] || titleize_slug(slug)
+deploy_id = slug.tr("-", "_")
+app_url = options[:app_url] || options[:host]
+
+updates = [
+  [
+    "config/application.rb",
+    [
+      [/\bmodule #{Regexp.escape(OLD_MODULE_NAME)}\b/, "module #{module_name}"]
+    ]
+  ],
+  [
+    "app/views/layouts/application.html.erb",
+    [
+      [/#{Regexp.escape(OLD_DISPLAY_NAME)}/, display_name]
+    ]
+  ],
+  [
+    "app/views/layouts/devise.html.erb",
+    [
+      [/#{Regexp.escape(OLD_DISPLAY_NAME)}/, display_name]
+    ]
+  ],
+  [
+    "app/views/layouts/plain.html.erb",
+    [
+      [/#{Regexp.escape(OLD_DISPLAY_NAME)}/, display_name]
+    ]
+  ],
+  [
+    "app/views/pwa/manifest.json.erb",
+    [
+      [/"name":\s*"#{Regexp.escape(OLD_PWA_NAME)}"/, %("name": "#{display_name}")],
+      [/"description":\s*"#{Regexp.escape(OLD_PWA_NAME)}\."/, %("description": "#{display_name}.")]
+    ]
+  ],
+  [
+    "config/deploy.yml",
+    [
+      [/#{Regexp.escape(OLD_DEPLOY_ID)}/, deploy_id]
+    ]
+  ],
+  [
+    "Dockerfile",
+    [
+      [/#{Regexp.escape(OLD_DEPLOY_ID)}/, deploy_id]
+    ]
+  ],
+  [
+    "README.md",
+    [
+      [/\A# #{Regexp.escape(OLD_TEMPLATE_TITLE)}$/, "# #{display_name}"],
+      [/`#{Regexp.escape(OLD_SLUG)}`/, "`#{slug}`"],
+      [/#{Regexp.escape(OLD_SLUG)}\.git/, "#{slug}.git"],
+      [/#{Regexp.escape(OLD_TEMPLATE_TITLE)}/, display_name]
+    ]
+  ],
+  [
+    "docs/template_contract.md",
+    [
+      [/#{Regexp.escape(OLD_SLUG)}/, slug]
+    ]
+  ],
+  [
+    "docs/dark_factory/templates/decomposition_plan.md",
+    [
+      [/#{Regexp.escape(OLD_SLUG)}/, slug]
+    ]
+  ],
+  [
+    "docs/dark_factory/templates/high_fidelity_spec.md",
+    [
+      [/#{Regexp.escape(OLD_SLUG)}/, slug]
+    ]
+  ]
+]
+
+if options[:host]
+  updates << [
+    "config/deploy.yml",
+    [
+      [/app\.example\.com/, options[:host]]
+    ]
+  ]
+end
+
+if app_url
+  asset_host = app_url.match?(%r{\Ahttps?://}) ? app_url : "http://#{app_url}"
+  updates << [
+    ".env.sample",
+    [
+      [/^APP_URL=.*$/, "APP_URL=#{app_url}"],
+      [/^ASSET_HOST=.*$/, "ASSET_HOST=#{asset_host}"]
+    ]
+  ]
+end
+
+if options[:from_email]
+  updates << [
+    "config/initializers/devise.rb",
+    [
+      [/^\s*config\.mailer_sender = ".*"$/, %(  config.mailer_sender = "#{options[:from_email]}")]
+    ]
+  ]
+  updates << [
+    "app/mailers/application_mailer.rb",
+    [
+      [/^\s*default from: ".*"$/, %(  default from: "#{options[:from_email]}")]
+    ]
+  ]
+end
+
+grouped_updates = {}
+updates.each do |path, replacements|
+  grouped_updates[path] ||= []
+  grouped_updates[path].concat(replacements)
+end
+
+counts = { updated: 0, unchanged: 0 }
+
+grouped_updates.each do |path, replacements|
+  result = update_file(path, replacements, dry_run: options[:dry_run], verbose: options[:verbose])
+  counts[result] += 1
+end
+
+puts
+puts "Summary:"
+puts "- app name: #{display_name}"
+puts "- slug: #{slug}"
+puts "- module: #{module_name}"
+puts "- updated files: #{counts[:updated]}"
+puts "- unchanged files: #{counts[:unchanged]}"
+puts "- mode: #{options[:dry_run] ? 'dry-run' : 'write'}"
