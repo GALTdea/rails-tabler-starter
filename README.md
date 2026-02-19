@@ -76,6 +76,35 @@ bin/dev
 
 ```
 
+## Rename Your App
+
+This template includes a rename helper so new projects can be rebranded in one step.
+
+```bash
+# Preview changes only
+bin/rename_app "My New App" --dry-run
+
+# Apply changes
+bin/rename_app "My New App" \
+  --slug my-new-app \
+  --module MyNewApp \
+  --host app.mynewapp.com \
+  --from-email noreply@mynewapp.com
+```
+
+What it updates:
+- Rails module namespace (`config/application.rb`)
+- App title fallbacks in layout files
+- PWA manifest name/description
+- Deployment identifiers in `config/deploy.yml` and Docker image comments
+- Template/documentation name references
+- Optional email sender settings and `.env.sample` URL values
+
+Recommended flow after cloning:
+1. Run `bin/rename_app "Your App Name" --dry-run`
+2. Run the command again without `--dry-run`
+3. Run `bin/setup`
+
 **Promote User to Admin:**
 
 ```ruby
