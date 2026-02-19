@@ -89,7 +89,8 @@ bin/rename_app "My New App" \
   --slug my-new-app \
   --module MyNewApp \
   --host app.mynewapp.com \
-  --from-email noreply@mynewapp.com
+  --from-email noreply@mynewapp.com \
+  --update-test-host
 ```
 
 What it updates:
@@ -98,7 +99,9 @@ What it updates:
 - PWA manifest name/description
 - Deployment identifiers in `config/deploy.yml` and Docker image comments
 - Template/documentation name references
-- Optional email sender settings and `.env.sample` URL values
+- `.env.sample` URL values when `--host` or `--app-url` is provided
+- Devise and application mailer sender email (defaults to `noreply@<slug>.test`, overridable with `--from-email`)
+- Test mailer host only when `--update-test-host` is provided
 
 Recommended flow after cloning:
 1. Run `bin/rename_app "Your App Name" --dry-run`

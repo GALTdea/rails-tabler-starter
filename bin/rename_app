@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "optparse"
+require "uri"
 
 OLD_MODULE_NAME = "RailsTabler8"
 OLD_DISPLAY_NAME = "Rails Tabler 8"
@@ -23,6 +24,20 @@ end
 
 def normalize_slug(value)
   value.to_s.downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-+|-+\z/, "")
+end
+
+def derive_default_from_email(slug)
+  "noreply@#{slug}.test"
+end
+
+def host_from_urlish(value)
+  input = value.to_s.strip
+  return nil if input.empty?
+
+  candidate = input.match?(%r{\Ahttps?://}) ? input : "http://#{input}"
+  URI.parse(candidate).host
+rescue URI::InvalidURIError
+  nil
 end
 
 def apply_replacements(content, replacements)
@@ -57,7 +72,8 @@ end
 
 options = {
   dry_run: false,
-  verbose: true
+  verbose: true,
+  update_test_host: false
 }
 
 parser = OptionParser.new do |opts|
@@ -65,14 +81,15 @@ parser = OptionParser.new do |opts|
     Usage: bin/rename_app NEW_APP_NAME [options]
 
     Example:
-      bin/rename_app "Acme Portal" --slug acme-portal --module AcmePortal --host app.acme.com --from-email noreply@acme.com
+      bin/rename_app "Acme Portal" --slug acme-portal --module AcmePortal --host app.acme.com --from-email noreply@acme.com --update-test-host
   USAGE
 
   opts.on("--slug VALUE", "URL/repo slug (default: derived from NEW_APP_NAME)") { |v| options[:slug] = v }
   opts.on("--module VALUE", "Ruby module name (default: CamelCase slug)") { |v| options[:module_name] = v }
   opts.on("--host VALUE", "Primary host (updates config/deploy.yml and .env.sample APP_URL)") { |v| options[:host] = v }
   opts.on("--app-url VALUE", "APP_URL value for .env.sample (defaults to --host when provided)") { |v| options[:app_url] = v }
-  opts.on("--from-email VALUE", "Sender email for Devise/ApplicationMailer") { |v| options[:from_email] = v }
+  opts.on("--from-email VALUE", "Sender email (default: noreply@<slug>.test)") { |v| options[:from_email] = v }
+  opts.on("--update-test-host", "Update config/environments/test.rb mailer host using --app-url/--host") { options[:update_test_host] = true }
   opts.on("--dry-run", "Preview changes without writing files") { options[:dry_run] = true }
   opts.on("--quiet", "Reduce output") { options[:verbose] = false }
   opts.on("-h", "--help", "Show help") do
@@ -91,6 +108,7 @@ abort_with("Could not derive a valid slug. Pass --slug explicitly.") if slug.emp
 module_name = options[:module_name] || titleize_slug(slug)
 deploy_id = slug.tr("-", "_")
 app_url = options[:app_url] || options[:host]
+from_email = options[:from_email] || derive_default_from_email(slug)
 
 updates = [
   [
@@ -185,17 +203,27 @@ if app_url
   ]
 end
 
-if options[:from_email]
-  updates << [
-    "config/initializers/devise.rb",
-    [
-      [/^\s*config\.mailer_sender = ".*"$/, %(  config.mailer_sender = "#{options[:from_email]}")]
-    ]
+updates << [
+  "config/initializers/devise.rb",
+  [
+    [/^\s*config\.mailer_sender = ".*"$/, %(  config.mailer_sender = "#{from_email}")]
   ]
+]
+updates << [
+  "app/mailers/application_mailer.rb",
+  [
+    [/^\s*default from: ".*"$/, %(  default from: "#{from_email}")]
+  ]
+]
+
+if options[:update_test_host]
+  test_host = host_from_urlish(app_url || options[:host])
+  abort_with("Cannot derive test host. Pass --host or --app-url when using --update-test-host.") if test_host.nil? || test_host.empty?
+
   updates << [
-    "app/mailers/application_mailer.rb",
+    "config/environments/test.rb",
     [
-      [/^\s*default from: ".*"$/, %(  default from: "#{options[:from_email]}")]
+      [/config\.action_mailer\.default_url_options = \{ host: ".*" \}/, %(  config.action_mailer.default_url_options = { host: "#{test_host}" })]
     ]
   ]
 end
@@ -218,6 +246,7 @@ puts "Summary:"
 puts "- app name: #{display_name}"
 puts "- slug: #{slug}"
 puts "- module: #{module_name}"
+puts "- from email: #{from_email}"
 puts "- updated files: #{counts[:updated]}"
 puts "- unchanged files: #{counts[:unchanged]}"
 puts "- mode: #{options[:dry_run] ? 'dry-run' : 'write'}"
