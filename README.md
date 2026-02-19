@@ -115,6 +115,14 @@ User.first.update(admin: true)
 
 ```
 
+## Customizing the sidebar navigation
+
+To **add or hide** sidebar links (including by role), edit **`app/views/common/_nav_items.html.erb`**.
+
+- **Add a link:** Use the same pattern as existing items: `<%= nav_link your_path do %> ... <% end %>` inside the `<%= nav_bar do %> ... <% end %>` block. Nav items are shown when a space is present (`@space`); use space-scoped paths (e.g. `space_xyz_path(@space)`) for tenant-scoped resources.
+- **Hide by role:** Wrap any item in a conditional, e.g. `<% if current_user.admin? %>` for global admins, or your Pundit policy (e.g. `<% if policy(@space).manage? %>`) for space-level visibility. Admin-only links (Setup, Rails Admin) already live in the profile dropdown; use the same approach in the sidebar for space roles.
+- **Merge conflicts:** This file is part of the template. If you pull updates from the upstream template, changes to `_nav_items.html.erb` may conflict. Resolve manually or re-apply your custom links after merging.
+
 ## Contributing
 
 1. Fork it.
