@@ -24,6 +24,52 @@
 * **Simplified Infrastructure:** Built for Rails 8. Uses `solid_queue` and `solid_cache`—no Redis required for small-to-medium deployments.
 * **Secure:** Pre-loaded with Pundit (AuthZ), Devise (AuthN), and Brakeman security auditing.
 
+## Template Usage & Updates
+
+This repository is a **GitHub Template Repository**. Use it to start new Rails projects and still pull in future improvements from the boilerplate.
+
+### 1. Create your project
+
+- On GitHub, click **"Use this template"** (green button).
+- Choose **"Create a new repository"** and pick a name for your project.
+- Clone your new repo locally:
+  ```bash
+  git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git my_app
+  cd my_app
+  bin/setup
+  ```
+
+### 2. Link the boilerplate as upstream
+
+To pull future updates from this template, add it as a remote:
+
+```bash
+git remote add upstream https://github.com/tarunvelli/rails-tabler-starter.git
+```
+
+*(If you use a different copy of this template, replace the URL with that repo.)*
+
+### 3. Merging updates from the template
+
+When the boilerplate changes and you want those updates in your project:
+
+```bash
+git fetch upstream
+git merge upstream/main --allow-unrelated-histories
+```
+
+- Use `--allow-unrelated-histories` for the **first** merge (your project and the template have different commit histories). Later updates can usually be merged with:
+  ```bash
+  git fetch upstream
+  git merge upstream/main
+  ```
+- Resolve any merge conflicts (e.g. in `app/views/common/_nav_items.html.erb` or config files), then commit.
+
+### 4. After merging
+
+- Run `bin/setup` if dependencies or env changed.
+- Re-run your rename or customizations if they were overwritten (e.g. `bin/rename_app "Your App"`).
+
 ## The Stack
 
 * **Core:** Rails 8.0+, Ruby 3.3+, SQLite (Production-optimized).
